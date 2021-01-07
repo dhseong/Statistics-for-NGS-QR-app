@@ -5,12 +5,11 @@ library(ggplot2)
 library(pastecs)
 library(doBy)
 library(psych)
-library(descriptr)
+library(DT)
 
 # Import data using REST API
 source('./fetch.R')
 data <- fetchData()
-
 
 
 # ==============================================================================
@@ -35,7 +34,7 @@ ui <- fluidPage(
                 selectInput(
                     inputId = "graphSelected",
                     label = "1. Select graph:",
-                    choices = c("Density", "Boxplot", "PR Score", "Summary")
+                    choices = c("Density", "Boxplot", "PR Score", "Data table", "Summary")
                 ),
     
         # ----------------------------------------------------------------------
@@ -111,6 +110,44 @@ ui <- fluidPage(
                 conditionalPanel(
                     condition = "input.graphSelected === 'PR Score'",
                     uiOutput("idSelected3")
+                ),
+        
+        # ----------------------------------------------------------------------
+        # select columns
+        # ----------------------------------------------------------------------
+                conditionalPanel(
+                    condition = "input.graphSelected === 'Data table'",
+                    checkboxGroupInput(
+                        inputId = "column4",
+                        label = "2. Select columns:",
+                        choices = c('sequencingType', 'targetGene', 'specimenType',
+                                    'samplingDate', 'cellline', 'od260280', 'od260230', 'dnaIntegrity',
+                                    'libraryInputAmount', 'libraryInsertSize', 'readLength',
+                                    'totalReads', 'meanCoverage', 'onTargetRate', 'q30', 'prScore'),
+                        selected = c('sequencingType', 'targetGene', 'specimenType',
+                                     'samplingDate', 'cellline', 'od260280', 'od260230', 'dnaIntegrity',
+                                     'libraryInputAmount', 'libraryInsertSize', 'readLength',
+                                     'totalReads', 'meanCoverage', 'onTargetRate', 'q30', 'prScore')
+                    )
+                ),
+        
+        # ----------------------------------------------------------------------
+        # select data elements
+        # ----------------------------------------------------------------------
+                conditionalPanel(
+                    condition = "input.graphSelected === 'Summary'",
+                    checkboxGroupInput(
+                        inputId = "dataElement5",
+                        label = "2. Select data elements:",
+                        choices = c("OD 260/280", "OD 260/230", "DNA median size (bp)",
+                                    "Library input amount (ng)", "Library insert size (bp)",
+                                    "Total reads", "Mean coverage", "Uniformity",
+                                    "on-Target-Rate (%)", "Q30 (%)", "PR score (%)"),
+                        selected = c("OD 260/280", "OD 260/230", "DNA median size (bp)",
+                                     "Library input amount (ng)", "Library insert size (bp)",
+                                    "Total reads", "Mean coverage", "Uniformity",
+                                    "on-Target-Rate (%)", "Q30 (%)", "PR score (%)")
+                    )
                 )
             )
         ),
@@ -131,8 +168,10 @@ ui <- fluidPage(
             ),
             conditionalPanel(condition = "input.graphSelected === 'PR Score'",
                              plotOutput("prscore")),
+            conditionalPanel(condition = "input.graphSelected === 'Data table'",
+                             DTOutput("dataTable")),
             conditionalPanel(condition = "input.graphSelected === 'Summary'",
-                             tableOutput("summary"))
+                             DTOutput("summary"))
         )
     ))
 
@@ -298,7 +337,6 @@ server <- function(input, output) {
         data[which(data$identifier == idSelected3()), c("meanCoverage")]
     })
     
-
     # --------------------------------------------------------------------------
     # Set output
     #
@@ -507,43 +545,269 @@ server <- function(input, output) {
     })
     
     # --------------------------------------------------------------------------
-    # Summary
+    # Data table
     # --------------------------------------------------------------------------
-    # output$summary <- renderPrint({
-    #     summaryData <- data[which(data$specimenType == "FFPE" | data$specimenType == "Fresh"),]
-    #     describeBy(summaryData[c("od260280", "od260230", "dnaIntegrity", "libraryInputAmount",
-    #         "libraryInsertSize", "readLength", "totalReads","meanCoverage",
-    #         "uniformity", "onTargetRate", "q30", "prScore")],
-    #     summaryData$specimenType,
-    #     mat = FALSE,
-    #     skew = FALSE)
-    # })
-    # output$summary <- renderTable({
-    #     summaryData <- data[which(data$specimenType == "FFPE"), c("od260280", "od260230")]
-    #     variable <- colnames(summaryData)["od260280"]
-    #     mean <- mean(summaryData[, "od260280"], na.rm=TRUE)
-    #     std_dev <- sd(summaryData[, "od260280"], na.rm=TRUE)
-    #     median <- median(summaryData[, "od260280"], na.rm=TRUE)
-    #     min <- min(summaryData[, "od260280"], na.rm=TRUE)
-    #     max <- max(summaryData[, "od260280"], na.rm=TRUE)
-    #     obs_num <- nrow(summaryData)
-    #     quartile_1 <- quantile(summaryData[, "od260280"], 0.25, na.rm=TRUE)
-    #     quartile_3 <- quantile(summaryData[, "od260280"], 0.75, na.rm=TRUE)
-    #     
-    #     desc_summary <- data.frame(variable, 
-    #                                mean, std_dev, 
-    #                                median, min, max, 
-    #                                obs_num, 
-    #                                quartile_1, quartile_3)
-    #     
-    #     # render Table
-    #     desc_summary[, c("variable", "mean"), drop = FALSE]
-    # })
-    output$summary <- renderTable({
-        summaryData <- data[which(data$specimenType == "FFPE"), c("od260280")]
-        df1_summary<-as.data.frame(apply(summaryData,2,summary))
+    output$dataTable <- renderDT({
+        # ----------------------------------------------------------------------
+        # DT Table
+        # ----------------------------------------------------------------------
+        datatable(
+            data[, c("identifier", input$column4)],
+            # colnames = c('Order ID', 'Sequencing type', 'Target gene', 'Specimen type',
+            #              'Sampling date', 'Cell line', 'OD 260/280', 'OD 260/230', 'DNA median size',
+            #              'Library input amount', 'Library insert size', 'Read length',
+            #              'Total reads', 'Mean coverage', 'on-Target-Rate', 'Q30', 'PR score'),
+            rownames = TRUE,
+            options = list(
+                searching = FALSE
+            ))
     })
     
+    # --------------------------------------------------------------------------
+    # Summary
+    # --------------------------------------------------------------------------
+    output$summary <- renderDT({
+        freshData <- data[which(data$specimenType == "Fresh"),]
+        ffpeData <- data[which(data$specimenType == "FFPE"),]
+        
+        descSummary <- data.frame("element"=character(0),
+                                  "meanFresh"=numeric(0), "meanFFPE"=numeric(0),
+                                  "stdFresh"=numeric(0), "stdFFPE"=numeric(0),
+                                  "thresholdFresh"=character(0), "thresholdFFPE"=character(0))
+        
+        # ----------------------------------------------------------------------
+        # od260280
+        # ----------------------------------------------------------------------
+        element <- "OD 260/280"
+        meanFresh <- round(mean(freshData[, c("od260280")], na.rm=TRUE), digits=2) 
+        meanFFPE <- round(mean(ffpeData[, c("od260280")], na.rm=TRUE), digits=2)
+        stdFresh <- round(sd(freshData[, c("od260280")], na.rm=TRUE), digits=2)
+        stdFFPE <- round(sd(ffpeData[, c("od260280")], na.rm=TRUE), digits=2)
+        thresholdFresh <- "1.8~2.1"
+        thresholdFFPE <- "1.8~2.1"
+        
+        descSummary <- rbind(descSummary, 
+                             data.frame("element"=element,
+                                        "meanFresh"=meanFresh, "meanFFPE"=meanFFPE,
+                                        "stdFresh"=stdFresh, "stdFFPE"=stdFFPE,
+                                        "thresholdFresh"=thresholdFresh, "thresholdFFPE"=thresholdFFPE))
+
+        # ----------------------------------------------------------------------
+        # od260230
+        # ----------------------------------------------------------------------
+        element <- "OD 260/230"
+        meanFresh <- round(mean(freshData[, c("od260230")], na.rm=TRUE), digits=2) 
+        meanFFPE <- round(mean(ffpeData[, c("od260230")], na.rm=TRUE), digits=2)
+        stdFresh <- round(sd(freshData[, c("od260230")], na.rm=TRUE), digits=2)
+        stdFFPE <- round(sd(ffpeData[, c("od260230")], na.rm=TRUE), digits=2)
+        thresholdFresh <- "1.8~2.5"
+        thresholdFFPE <- "1.8~2.5"
+        
+        descSummary <- rbind(descSummary, 
+                             data.frame("element"=element,
+                                        "meanFresh"=meanFresh, "meanFFPE"=meanFFPE,
+                                        "stdFresh"=stdFresh, "stdFFPE"=stdFFPE,
+                                        "thresholdFresh"=thresholdFresh, "thresholdFFPE"=thresholdFFPE))
+        
+        # ----------------------------------------------------------------------
+        # dnaIntegrity
+        # ----------------------------------------------------------------------
+        element <- "DNA median size (bp)"
+        meanFresh <- round(mean(freshData[, c("dnaIntegrity")], na.rm=TRUE), digits=2) 
+        meanFFPE <- round(mean(ffpeData[, c("dnaIntegrity")], na.rm=TRUE), digits=2)
+        stdFresh <- round(sd(freshData[, c("dnaIntegrity")], na.rm=TRUE), digits=2)
+        stdFFPE <- round(sd(ffpeData[, c("dnaIntegrity")], na.rm=TRUE), digits=2)
+        thresholdFresh <- "≥ 350"
+        thresholdFFPE <- "≥ 350"
+        
+        descSummary <- rbind(descSummary, 
+                             data.frame("element"=element,
+                                        "meanFresh"=meanFresh, "meanFFPE"=meanFFPE,
+                                        "stdFresh"=stdFresh, "stdFFPE"=stdFFPE,
+                                        "thresholdFresh"=thresholdFresh, "thresholdFFPE"=thresholdFFPE))
+        
+        # ----------------------------------------------------------------------
+        # libraryInputAmount
+        # ----------------------------------------------------------------------
+        element <- "Library input amount (ng)"
+        meanFresh <- round(mean(freshData[, c("libraryInputAmount")], na.rm=TRUE), digits=2) 
+        meanFFPE <- round(mean(ffpeData[, c("libraryInputAmount")], na.rm=TRUE), digits=2)
+        stdFresh <- round(sd(freshData[, c("libraryInputAmount")], na.rm=TRUE), digits=2)
+        stdFFPE <- round(sd(ffpeData[, c("libraryInputAmount")], na.rm=TRUE), digits=2)
+        thresholdFresh <- "≥ 300"
+        thresholdFFPE <- "≥ 200"
+        
+        descSummary <- rbind(descSummary, 
+                             data.frame("element"=element,
+                                        "meanFresh"=meanFresh, "meanFFPE"=meanFFPE,
+                                        "stdFresh"=stdFresh, "stdFFPE"=stdFFPE,
+                                        "thresholdFresh"=thresholdFresh, "thresholdFFPE"=thresholdFFPE))
+        
+        # ----------------------------------------------------------------------
+        # libraryInsertSize
+        # ----------------------------------------------------------------------
+        element <- "Library insert size (bp)"
+        meanFresh <- round(mean(freshData[, c("libraryInsertSize")], na.rm=TRUE), digits=2) 
+        meanFFPE <- round(mean(ffpeData[, c("libraryInsertSize")], na.rm=TRUE), digits=2)
+        stdFresh <- round(sd(freshData[, c("libraryInsertSize")], na.rm=TRUE), digits=2)
+        stdFFPE <- round(sd(ffpeData[, c("libraryInsertSize")], na.rm=TRUE), digits=2)
+        thresholdFresh <- "150~200"
+        thresholdFFPE <- "150~200"
+        
+        descSummary <- rbind(descSummary, 
+                             data.frame("element"=element,
+                                        "meanFresh"=meanFresh, "meanFFPE"=meanFFPE,
+                                        "stdFresh"=stdFresh, "stdFFPE"=stdFFPE,
+                                        "thresholdFresh"=thresholdFresh, "thresholdFFPE"=thresholdFFPE))
+        
+        # ----------------------------------------------------------------------
+        # readLength
+        # ----------------------------------------------------------------------
+        # element <- "Read length"
+        # meanFresh <- round(mean(freshData[, c("readLength")], na.rm=TRUE), digits=2) 
+        # meanFFPE <- round(mean(ffpeData[, c("readLength")], na.rm=TRUE), digits=2)
+        # stdFresh <- round(sd(freshData[, c("readLength")], na.rm=TRUE), digits=2)
+        # stdFFPE <- round(sd(ffpeData[, c("readLength")], na.rm=TRUE), digits=2)
+        # thresholdFresh <- ""
+        # thresholdFFPE <- ""
+        # 
+        # descSummary <- rbind(descSummary, 
+        #                      data.frame("element"=element,
+        #                                 "meanFresh"=meanFresh, "meanFFPE"=meanFFPE,
+        #                                 "stdFresh"=stdFresh, "stdFFPE"=stdFFPE,
+        #                                 "thresholdFresh"=thresholdFresh, "thresholdFFPE"=thresholdFFPE))
+
+        # ----------------------------------------------------------------------
+        # totalReads
+        # ----------------------------------------------------------------------
+        element <- "Total reads"
+        meanFresh <- round(mean(freshData[, c("totalReads")], na.rm=TRUE), digits=2) 
+        meanFFPE <- round(mean(ffpeData[, c("totalReads")], na.rm=TRUE), digits=2)
+        stdFresh <- round(sd(freshData[, c("totalReads")], na.rm=TRUE), digits=2)
+        stdFFPE <- round(sd(ffpeData[, c("totalReads")], na.rm=TRUE), digits=2)
+        thresholdFresh <- ""
+        thresholdFFPE <- ""
+        
+        descSummary <- rbind(descSummary, 
+                             data.frame("element"=element,
+                                        "meanFresh"=meanFresh, "meanFFPE"=meanFFPE,
+                                        "stdFresh"=stdFresh, "stdFFPE"=stdFFPE,
+                                        "thresholdFresh"=thresholdFresh, "thresholdFFPE"=thresholdFFPE))
+        
+        # ----------------------------------------------------------------------
+        # meanCoverage
+        # ----------------------------------------------------------------------
+        element <- "Mean coverage"
+        meanFresh <- round(mean(freshData[, c("meanCoverage")], na.rm=TRUE), digits=2) 
+        meanFFPE <- round(mean(ffpeData[, c("meanCoverage")], na.rm=TRUE), digits=2)
+        stdFresh <- round(sd(freshData[, c("meanCoverage")], na.rm=TRUE), digits=2)
+        stdFFPE <- round(sd(ffpeData[, c("meanCoverage")], na.rm=TRUE), digits=2)
+        thresholdFresh <- "≥ 500"
+        thresholdFFPE <- "≥ 200"
+        
+        descSummary <- rbind(descSummary, 
+                             data.frame("element"=element,
+                                        "meanFresh"=meanFresh, "meanFFPE"=meanFFPE,
+                                        "stdFresh"=stdFresh, "stdFFPE"=stdFFPE,
+                                        "thresholdFresh"=thresholdFresh, "thresholdFFPE"=thresholdFFPE))
+        
+        # ----------------------------------------------------------------------
+        # uniformity
+        # ----------------------------------------------------------------------
+        element <- "Uniformity"
+        meanFresh <- round(mean(freshData[, c("uniformity")], na.rm=TRUE), digits=2) 
+        meanFFPE <- round(mean(ffpeData[, c("uniformity")], na.rm=TRUE), digits=2)
+        stdFresh <- round(sd(freshData[, c("uniformity")], na.rm=TRUE), digits=2)
+        stdFFPE <- round(sd(ffpeData[, c("uniformity")], na.rm=TRUE), digits=2)
+        thresholdFresh <- ""
+        thresholdFFPE <- ""
+        
+        descSummary <- rbind(descSummary, 
+                             data.frame("element"=element,
+                                        "meanFresh"=meanFresh, "meanFFPE"=meanFFPE,
+                                        "stdFresh"=stdFresh, "stdFFPE"=stdFFPE,
+                                        "thresholdFresh"=thresholdFresh, "thresholdFFPE"=thresholdFFPE))
+        
+        # ----------------------------------------------------------------------
+        # onTargetRate
+        # ----------------------------------------------------------------------
+        element <- "on-Target-Rate (%)"
+        meanFresh <- round(mean(freshData[, c("onTargetRate")], na.rm=TRUE), digits=2) 
+        meanFFPE <- round(mean(ffpeData[, c("onTargetRate")], na.rm=TRUE), digits=2)
+        stdFresh <- round(sd(freshData[, c("onTargetRate")], na.rm=TRUE), digits=2)
+        stdFFPE <- round(sd(ffpeData[, c("onTargetRate")], na.rm=TRUE), digits=2)
+        thresholdFresh <- ""
+        thresholdFFPE <- ""
+        
+        descSummary <- rbind(descSummary, 
+                             data.frame("element"=element,
+                                        "meanFresh"=meanFresh, "meanFFPE"=meanFFPE,
+                                        "stdFresh"=stdFresh, "stdFFPE"=stdFFPE,
+                                        "thresholdFresh"=thresholdFresh, "thresholdFFPE"=thresholdFFPE))
+        
+        # ----------------------------------------------------------------------
+        # q30
+        # ----------------------------------------------------------------------
+        element <- "Q30 (%)"
+        meanFresh <- round(mean(freshData[, c("q30")], na.rm=TRUE), digits=2) 
+        meanFFPE <- round(mean(ffpeData[, c("q30")], na.rm=TRUE), digits=2)
+        stdFresh <- round(sd(freshData[, c("q30")], na.rm=TRUE), digits=2)
+        stdFFPE <- round(sd(ffpeData[, c("q30")], na.rm=TRUE), digits=2)
+        thresholdFresh <- ""
+        thresholdFFPE <- ""
+        
+        descSummary <- rbind(descSummary, 
+                             data.frame("element"=element,
+                                        "meanFresh"=meanFresh, "meanFFPE"=meanFFPE,
+                                        "stdFresh"=stdFresh, "stdFFPE"=stdFFPE,
+                                        "thresholdFresh"=thresholdFresh, "thresholdFFPE"=thresholdFFPE))
+        
+        # ----------------------------------------------------------------------
+        # prScore
+        # ----------------------------------------------------------------------
+        element <- "PR score (%)"
+        meanFresh <- round(mean(freshData[, c("prScore")], na.rm=TRUE), digits=2) 
+        meanFFPE <- round(mean(ffpeData[, c("prScore")], na.rm=TRUE), digits=2)
+        stdFresh <- round(sd(freshData[, c("prScore")], na.rm=TRUE), digits=2)
+        stdFFPE <- round(sd(ffpeData[, c("prScore")], na.rm=TRUE), digits=2)
+        thresholdFresh <- "≥ 80"
+        thresholdFFPE <- "≥ 80"
+        
+        descSummary <- rbind(descSummary, 
+                             data.frame("element"=element,
+                                        "meanFresh"=meanFresh, "meanFFPE"=meanFFPE,
+                                        "stdFresh"=stdFresh, "stdFFPE"=stdFFPE,
+                                        "thresholdFresh"=thresholdFresh, "thresholdFFPE"=thresholdFFPE))
+                
+        # ----------------------------------------------------------------------
+        # DT Table
+        # ----------------------------------------------------------------------
+        sketch = htmltools::withTags(table(
+            class = 'display',
+            thead(
+                tr(
+                    th(rowspan = 2, 'Data element (unit)', style="text-align:center"),
+                    th(colspan = 2, 'Mean', style="text-align:center"),
+                    th(colspan = 2, 'Std. Deviation', style="text-align:center"),
+                    th(colspan = 2, 'Thresholds', style="text-align:center")
+                ),
+                tr(
+                    lapply(rep(c('Fresh cell', 'FFPE'), 3), th)
+                )
+            )
+        ))
+        datatable(
+            descSummary %>% filter(element %in% c(input$dataElement5)),
+            container = sketch,
+            rownames = FALSE,
+            options = list(
+                paging = FALSE,
+                searching = FALSE,
+                info = FALSE,
+                ordering = FALSE,
+                columnDefs = list(list(className = 'dt-center', targets = 1:6))
+            ))
+    })
 }
 
 
