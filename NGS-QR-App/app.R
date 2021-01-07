@@ -129,26 +129,26 @@ ui <- fluidPage(
                                      'libraryInputAmount', 'libraryInsertSize', 'readLength',
                                      'totalReads', 'meanCoverage', 'onTargetRate', 'q30', 'prScore')
                     )
-                ),
+                )
         
         # ----------------------------------------------------------------------
         # select data elements
         # ----------------------------------------------------------------------
-                conditionalPanel(
-                    condition = "input.graphSelected === 'Summary'",
-                    checkboxGroupInput(
-                        inputId = "dataElement5",
-                        label = "2. Select data elements:",
-                        choices = c("OD 260/280", "OD 260/230", "DNA median size (bp)",
-                                    "Library input amount (ng)", "Library insert size (bp)",
-                                    "Total reads", "Mean coverage", "Uniformity",
-                                    "on-Target-Rate (%)", "Q30 (%)", "PR score (%)"),
-                        selected = c("OD 260/280", "OD 260/230", "DNA median size (bp)",
-                                     "Library input amount (ng)", "Library insert size (bp)",
-                                    "Total reads", "Mean coverage", "Uniformity",
-                                    "on-Target-Rate (%)", "Q30 (%)", "PR score (%)")
-                    )
-                )
+                # conditionalPanel(
+                #     condition = "input.graphSelected === 'Summary'",
+                #     checkboxGroupInput(
+                #         inputId = "dataElement5",
+                #         label = "2. Select data elements:",
+                #         choices = c("OD 260/280", "OD 260/230", "DNA median size",
+                #                     "Library input amount", "Library insert size",
+                #                     "Total reads", "Mean coverage", "Uniformity",
+                #                     "on-Target-Rate", "Q30", "PR score"),
+                #         selected = c("OD 260/280", "OD 260/230", "DNA median size",
+                #                     "Library input amount", "Library insert size",
+                #                     "Total reads", "Mean coverage", "Uniformity",
+                #                     "on-Target-Rate", "Q30", "PR score")
+                #     )
+                # )
             )
         ),
     
@@ -547,7 +547,7 @@ server <- function(input, output) {
     # --------------------------------------------------------------------------
     # Data table
     # --------------------------------------------------------------------------
-    output$dataTable <- renderDT({
+    output$dataTable <- renderDataTable({
         # ----------------------------------------------------------------------
         # DT Table
         # ----------------------------------------------------------------------
@@ -569,6 +569,9 @@ server <- function(input, output) {
     output$summary <- renderDT({
         freshData <- data[which(data$specimenType == "Fresh"),]
         ffpeData <- data[which(data$specimenType == "FFPE"),]
+        
+        # descSummary <- data.frame(matrix(ncol=7, nrow=0))
+        # colnames(descSummary) <- c("element", "meanFresh", "meanFFPE", "stdFresh", "stdFFPE", "thresholdFresh", "thresholdFFPE")
         
         descSummary <- data.frame("element"=character(0),
                                   "meanFresh"=numeric(0), "meanFFPE"=numeric(0),
@@ -612,7 +615,7 @@ server <- function(input, output) {
         # ----------------------------------------------------------------------
         # dnaIntegrity
         # ----------------------------------------------------------------------
-        element <- "DNA median size (bp)"
+        element <- "DNA median size"
         meanFresh <- round(mean(freshData[, c("dnaIntegrity")], na.rm=TRUE), digits=2) 
         meanFFPE <- round(mean(ffpeData[, c("dnaIntegrity")], na.rm=TRUE), digits=2)
         stdFresh <- round(sd(freshData[, c("dnaIntegrity")], na.rm=TRUE), digits=2)
@@ -629,7 +632,7 @@ server <- function(input, output) {
         # ----------------------------------------------------------------------
         # libraryInputAmount
         # ----------------------------------------------------------------------
-        element <- "Library input amount (ng)"
+        element <- "Library input amount"
         meanFresh <- round(mean(freshData[, c("libraryInputAmount")], na.rm=TRUE), digits=2) 
         meanFFPE <- round(mean(ffpeData[, c("libraryInputAmount")], na.rm=TRUE), digits=2)
         stdFresh <- round(sd(freshData[, c("libraryInputAmount")], na.rm=TRUE), digits=2)
@@ -646,7 +649,7 @@ server <- function(input, output) {
         # ----------------------------------------------------------------------
         # libraryInsertSize
         # ----------------------------------------------------------------------
-        element <- "Library insert size (bp)"
+        element <- "Library insert size"
         meanFresh <- round(mean(freshData[, c("libraryInsertSize")], na.rm=TRUE), digits=2) 
         meanFFPE <- round(mean(ffpeData[, c("libraryInsertSize")], na.rm=TRUE), digits=2)
         stdFresh <- round(sd(freshData[, c("libraryInsertSize")], na.rm=TRUE), digits=2)
@@ -731,7 +734,7 @@ server <- function(input, output) {
         # ----------------------------------------------------------------------
         # onTargetRate
         # ----------------------------------------------------------------------
-        element <- "on-Target-Rate (%)"
+        element <- "on-Target-Rate"
         meanFresh <- round(mean(freshData[, c("onTargetRate")], na.rm=TRUE), digits=2) 
         meanFFPE <- round(mean(ffpeData[, c("onTargetRate")], na.rm=TRUE), digits=2)
         stdFresh <- round(sd(freshData[, c("onTargetRate")], na.rm=TRUE), digits=2)
@@ -748,7 +751,7 @@ server <- function(input, output) {
         # ----------------------------------------------------------------------
         # q30
         # ----------------------------------------------------------------------
-        element <- "Q30 (%)"
+        element <- "Q30"
         meanFresh <- round(mean(freshData[, c("q30")], na.rm=TRUE), digits=2) 
         meanFFPE <- round(mean(ffpeData[, c("q30")], na.rm=TRUE), digits=2)
         stdFresh <- round(sd(freshData[, c("q30")], na.rm=TRUE), digits=2)
@@ -765,7 +768,7 @@ server <- function(input, output) {
         # ----------------------------------------------------------------------
         # prScore
         # ----------------------------------------------------------------------
-        element <- "PR score (%)"
+        element <- "PR score"
         meanFresh <- round(mean(freshData[, c("prScore")], na.rm=TRUE), digits=2) 
         meanFFPE <- round(mean(ffpeData[, c("prScore")], na.rm=TRUE), digits=2)
         stdFresh <- round(sd(freshData[, c("prScore")], na.rm=TRUE), digits=2)
@@ -797,7 +800,8 @@ server <- function(input, output) {
             )
         ))
         datatable(
-            descSummary %>% filter(element %in% c(input$dataElement5)),
+            # descSummary %>% filter(element %in% c(input$dataElement5)),
+            descSummary,
             container = sketch,
             rownames = FALSE,
             options = list(
